@@ -1,0 +1,12 @@
+[Bb]uild/*
+
+.clangd/*
+.cache/*
+
+tests/*
+
+ext/vcpkg/*
+
+compile_commands.json
+
+Session.vim

@@ -1,0 +1,136 @@
+version: "3"
+
+vars:
+  PROJECT: "my new C++ project"
+  SRC_PATH: "{{.ROOT_DIR}}"
+  VCPKG_PATH: "ext/vcpkg"
+  VCPKG_TOOLCHAIN_FILE: "{{.ROOT_DIR}}/{{.VCPKG_PATH}}/scripts/buildsystems/vcpkg.cmake"
+  BUILD_FOLDER: "build"
+  BUILD_PATH: "{{.ROOT_DIR}}/{{.BUILD_FOLDER}}"
+  INSTALL_PATH: ""
+  TEMPLATE_REPOS: "merlinvn/cpp-template"
+
+tasks:
+  info:
+    silent: true
+    cmds:
+      - 'echo "Project: {{.PROJECT}}"'
+      - 'echo "Source path: {{.SRC_PATH}}"'
+      - 'echo "Build path: {{.BUILD_PATH}}"'
+      - 'echo "vcpkg path: {{.VCPKG_TOOLCHAIN}}"'
+
+  new:git:
+    cmds:
+      - git init
+    preconditions:
+      - sh: test ! -d .git
+        msg: "Project (.git folder) exists. Exiting..."
+
+  new:vcpkg:
+    cmds:
+      - echo "Init new project!"
+      - task: new:git
+        ignore_error: true
+      - "mkdir -p {{.ROOT_DIR}}/ext"
+      - "git submodule add https://github.com/microsoft/vcpkg.git {{.VCPKG_PATH}}"
+      - task: init:vcpkg
+
+  new:
+    desc: Create new project in the current folder. Should be called only one time per new project.
+    aliases: [i]
+    cmds:
+      - echo "Init new project!"
+      - task: new:git
+      - curl https://raw.githubusercontent.com/{{.TEMPLATE_REPOS}}/master/CMakeLists.txt -o CMakeLists.txt
+    preconditions:
+      - sh: command -v curl
+        msg: "Please install: curl zip unzip tar cmake ninja."
+      - sh: command -v zip
+        msg: "Please install: curl zip unzip tar cmake ninja."
+      - sh: command -v unzip
+        msg: "Please install: curl zip unzip tar cmake ninja."
+      - sh: command -v tar
+        msg: "Please install: curl zip unzip tar cmake ninja."
+      - sh: command -v cmake
+        msg: "Please install: curl zip unzip tar cmake ninja."
+      - sh: command -v ninja
+        msg: "Please install: curl zip unzip tar cmake ninja."
+
+  init:
+    desc: Initialize project that cloned from Github.
+    cmds:
+      - task: init:vcpkg
+      - task: init:install_deps
+
+  init:vcpkg:
+    cmds:
+      - '"[[ -d {{.VCPKG_PATH}} ]] && git submodule update --init --recursive" || echo "Init without vcpkg"'
+      - '"[[ -f {{.VCPKG_PATH}}/bootstrap-vcpkg.sh ]] && {{.ROOT_DIR}}/{{.VCPKG_PATH}}/bootstrap-vcpkg.sh -disableMetrics" || echo "Skipping bootstrap-vcpkg"'
+
+  init:install_deps:
+    cmds:
+
+  config:
+    aliases: [c]
+    desc: "Generate build system by using CMake"
+    cmds:
+      # - "[[ -f {{.VCPKG_TOOLCHAIN_FILE}} ]] && cmake -B {{.BUILD_PATH}} -G {{.GENERATOR}} -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DCMAKE_BUILD_TYPE={{.CONFIG}} -DCMAKE_TOOLCHAIN_FILE={{.VCPKG_TOOLCHAIN_FILE}} . || cmake -B {{.BUILD_PATH}} -G {{.GENERATOR}} -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DCMAKE_BUILD_TYPE={{.CONFIG}}"
+      - cmake -B {{.BUILD_PATH}} -G {{.GENERATOR}} -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DCMAKE_BUILD_TYPE={{.CONFIG}} .
+      - rm -f {{.ROOT_DIR}}/compile_commands.json
+      - ln -s {{.BUILD_PATH}}/compile_commands.json {{.ROOT_DIR}}/compile_commands.json
+    vars:
+      CONFIG: '{{ .CONFIG | default "Release" }}'
+      GENERATOR: '{{ .GENERATOR | default "Ninja" }}'
+
+  config:debug:
+    aliases: [cd]
+    cmds:
+      - task: config
+        vars: { CONFIG: Debug }
+
+  config:release:
+    aliases: [cr]
+    cmds:
+      - task: config
+        vars: { CONFIG: Release }
+
+  build:
+    aliases: [b]
+    desc: "Config & build project. Default to build release."
+    cmds:
+      - task: config
+        vars: { CONFIG: "{{.CONFIG}}" }
+      - cmake --build {{.BUILD_PATH}}
+    vars:
+      CONFIG: '{{ .CONFIG | default "Release" }}'
+
+  build:debug:
+    aliases: [bd]
+    desc: "Build debug"
+    cmds:
+      - task: build
+        vars: { CONFIG: Debug }
+
+  build:release:
+    aliases: [br]
+    desc: "Build release"
+    cmds:
+      - task: build
+        vars: { CONFIG: Release }
+
+  install:
+    cmds:
+    # run cmake install
+
+  clean:all:
+    desc: This only be used to develop the Taskfile.yml. Do not use if you do not know what it will do!!!
+    cmds:
+      - rm -rf .git
+      - rm -rf .gitmodules
+      - rm -rf ext
+      - task: clean
+  clean:
+    desc: Clear build folder
+    cmds:
+      - rm -rf {{.BUILD_PATH}}
+      - rm -f {{.ROOT_DIR}}/compile_commands.json
